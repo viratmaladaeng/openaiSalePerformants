@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
+from datetime import datetime, timezone
+
 
 # โหลดค่า Environment Variables
 load_dotenv()
@@ -89,9 +91,10 @@ def handle_message(event):
     else:
         # 🔹 **ค้นหาประวัติการสนทนา**
         chat_history = search_chat_history(user_id, user_message, top=5)
-
+        print(f"✅ ผลค้นหาประวัติการสนทนา: {chat_history}")
         # 🔹 **ค้นหาข้อมูลการขายจาก RAG**
         sales_data = search_sales_data(user_message, top=3)
+        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {search_sales_data}")
 
         # 🔹 **สร้างข้อความ Context สำหรับ AI**
         prompt = "นี่คือประวัติการสนทนาเดิมของคุณ:\n"
@@ -141,22 +144,46 @@ def handle_message(event):
     )
 
 # 🔹 **บันทึกข้อความลง Azure Cognitive Search**
+
 def save_chat(user_id, message):
     """บันทึกข้อความสนทนาไปยัง Azure Cognitive Search"""
     document = {
-        "id": f"{user_id}-{datetime.datetime.utcnow().isoformat()}",
+        "id": f"{user_id}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",  # ✅ แก้ไข ID
         "user_id": user_id,
-        "timestamp": datetime.datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),  # ✅ แก้ไข timestamp
         "message": message
     }
-    chat_history_client.upload_documents(documents=[document])
-    print(f"✅ บันทึกข้อความสำเร็จ: {document}")
+    try:
+        chat_history_client.upload_documents(documents=[document])
+        print(f"✅ บันทึกข้อความสำเร็จ: {document}")
+    except Exception as e:
+        print(f"❌ เกิดข้อผิดพลาดในการบันทึก: {e}")
+
+
 
 # 🔹 **ค้นหาประวัติการสนทนา**
-def search_chat_history(user_id, query, top=5):
+def search_chat_history(user_id, query, top=10):
     """ค้นหาข้อความเก่าของผู้ใช้จาก Azure Cognitive Search"""
-    results = chat_history_client.search(search_text=query, filter=f"user_id eq '{user_id}'", top=top, orderby="timestamp desc")
-    return [result["message"] for result in results] if results else ["ไม่มีประวัติการสนทนา"]
+    try:
+        results = chat_history_client.search(
+            search_text="*",  # ✅ ดึงทุกข้อความที่เกี่ยวข้อง
+            filter=f"user_id eq '{user_id}'",
+            top=top
+        )
+        
+        # 🔹 แปลงผลลัพธ์เป็นรายการข้อความ พร้อม timestamp
+        chat_history = [{"message": result["message"], "timestamp": result.get("timestamp", "")} for result in results]
+
+        # 🔹 เรียงลำดับข้อความตาม timestamp (จากใหม่ไปเก่า)
+        chat_history.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        return [entry["message"] for entry in chat_history] if chat_history else ["ไม่มีประวัติการสนทนา"]
+    
+    except Exception as e:
+        print(f"❌ Error fetching chat history: {e}")
+        return ["ขออภัย ไม่สามารถดึงประวัติการสนทนาได้"]
+
+
 
 # 🔹 **ค้นหาข้อมูลการขายจาก RAG**
 def search_sales_data(query, top=3):
