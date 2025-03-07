@@ -23,14 +23,14 @@ AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_KEY = os.getenv("AZURE_SEARCH_KEY")
-AZURE_SEARCH_INDEX = os.getenv("AZURE_SEARCH_INDEX")
-AZURE_OAI_DEPLOYMENT = os.getenv("AZURE_OAI_DEPLOYMENT")
+AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
+AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX") # ดัชนีที่ใช้ RAG ข้อมูลการขาย
 
 # ตรวจสอบค่าที่จำเป็น
 if not all([
     LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, 
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
-    AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY, AZURE_SEARCH_INDEX, AZURE_OAI_DEPLOYMENT
+    AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY
 ]):
     raise ValueError("Environment variables not set properly")
 
@@ -40,10 +40,16 @@ openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-02-15-preview"
 
-# ตั้งค่า Azure Cognitive Search
-search_client = SearchClient(
+# ตั้งค่า Azure Cognitive Search สำหรับทั้งสอง Index
+chat_history_client = SearchClient(
     endpoint=AZURE_SEARCH_ENDPOINT,
-    index_name=AZURE_SEARCH_INDEX,
+    index_name=AZURE_CHAT_HISTORY_INDEX,
+    credential=AzureKeyCredential(AZURE_SEARCH_KEY)
+)
+
+sales_data_client = SearchClient(
+    endpoint=AZURE_SEARCH_ENDPOINT,
+    index_name=AZURE_SALES_INDEX,
     credential=AzureKeyCredential(AZURE_SEARCH_KEY)
 )
 
@@ -83,10 +89,15 @@ def handle_message(event):
     else:
         # 🔹 **ค้นหาประวัติการสนทนา**
         chat_history = search_chat_history(user_id, user_message, top=5)
-        
+
+        # 🔹 **ค้นหาข้อมูลการขายจาก RAG**
+        sales_data = search_sales_data(user_message, top=3)
+
         # 🔹 **สร้างข้อความ Context สำหรับ AI**
         prompt = "นี่คือประวัติการสนทนาเดิมของคุณ:\n"
         prompt += "\n".join(chat_history)
+        prompt += f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
+        prompt += "\n".join(sales_data)
         prompt += f"\n\nผู้ใช้: {user_message}\nAI:"
 
         # 🔹 **ส่งข้อความไปยัง Azure OpenAI**
@@ -138,25 +149,20 @@ def save_chat(user_id, message):
         "timestamp": datetime.datetime.utcnow(),
         "message": message
     }
-    search_client.upload_documents(documents=[document])
-    print(f"✅ บันทึกข้อความของ {user_id} แล้ว")
+    chat_history_client.upload_documents(documents=[document])
+    print(f"✅ บันทึกข้อความสำเร็จ: {document}")
 
 # 🔹 **ค้นหาประวัติการสนทนา**
 def search_chat_history(user_id, query, top=5):
     """ค้นหาข้อความเก่าของผู้ใช้จาก Azure Cognitive Search"""
-    try:
-        results = search_client.search(
-            search_text=query,
-            filter=f"user_id eq '{user_id}'",
-            top=top,
-            orderby="timestamp desc"
-        )
-        
-        chat_history = [result["message"] for result in results]
-        return chat_history if chat_history else ["ไม่มีประวัติการสนทนา"]
-    except Exception as e:
-        print(f"Error fetching chat history: {e}")
-        return ["ขออภัย ไม่สามารถดึงประวัติการสนทนาได้"]
+    results = chat_history_client.search(search_text=query, filter=f"user_id eq '{user_id}'", top=top, orderby="timestamp desc")
+    return [result["message"] for result in results] if results else ["ไม่มีประวัติการสนทนา"]
+
+# 🔹 **ค้นหาข้อมูลการขายจาก RAG**
+def search_sales_data(query, top=3):
+    """ค้นหาข้อมูลการขายจาก Azure Cognitive Search"""
+    results = sales_data_client.search(search_text=query, top=top)
+    return [result["chunk"] for result in results] if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
 
 if __name__ == "__main__":
     import uvicorn
