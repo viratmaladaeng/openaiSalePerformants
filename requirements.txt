@@ -1,0 +1,9 @@
+gunicorn==23.0.0
+uvicorn==0.34.0
+fastapi
+python-dotenv
+azure-search-documents
+requests
+line-bot-sdk
+openai
+

@@ -1,0 +1,36 @@
+# Ignore Virtual Environment
+venv/
+env/
+.venv/
+
+# Ignore System Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Ignore Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore Logs
+*.log
+logs/
+*.tmp
+
+# Ignore Secret Files
+.env
+config.json
+credentials.json
+
+"Lib/site-packages/redis/" 
+"Lib/site-packages/redis-5.2.1.dist-info/" 
+"Lib/site-packages/redis/" 
+"Lib/site-packages/redis-5.2.1.dist-info/" 
+"Lib/site-packages/redis*" 
+"Lib/site-packages/redis*" 
+"Lib/site-packages/redis*" 
+
+Lib/site-packages/redis/
+Lib/site-packages/redis-5.2.1.dist-info/
