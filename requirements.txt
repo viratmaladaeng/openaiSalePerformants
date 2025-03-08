@@ -6,4 +6,5 @@ azure-search-documents
 requests
 line-bot-sdk
 openai
-
+azure-ai-inference
+azure-identity

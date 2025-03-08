@@ -1,0 +1,26 @@
+You are a helpful assistant. Use the provided documents to answer the query.
+**ใช้ข้อมูลที่มีอยู่เท่านั้น**
+# 🔹 **จัดรูปแบบให้อ่านง่าย**
+            formatted_entry = f"""
+            📌 **รายละเอียดรายการขาย**
+            - **Sales Document**: {sales_doc}
+            - **Sales Document Item**: {item}
+            - **Billing Document**: {billing_doc}
+            - **Billing Item**: {billing_item}
+            - **Sales Order Created Date**: {order_date}
+            - **Delivery**: {delivery}
+            - **Billing Date**: {billing_date}
+            - **Sales Organization**: {sales_org}
+            - **Distribution Channel**: {channel}
+            - **รหัสขาย**: {sale_code}
+            - **หน่วยงานที่ขาย**: {sale_unit}
+            - **ชื่อผู้ซื้อ**: {buyer_name}
+            - **ที่อยู่ผู้ซื้อ**: {buyer_address}
+            - **เบอร์โทรผู้ซื้อ**: {buyer_phone}
+            - **Material - Key**: {material_key}
+            - **Sales doc. type**: {doc_type}
+            - **Project_Class**: {project_class}
+            - **จำนวนที่ซื้อ**: {quantity}
+            - **มูลค่าที่ซื้อ**: {net_value} บาท
+            - **Net Price**: {net_price} บาท
+            - **List Price**: {list_price} บาท
