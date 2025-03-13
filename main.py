@@ -141,11 +141,11 @@ def handle_message(event):
 
         print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")        
 
-        
+        chat_history.append([{"role": "system", "content": system_message}])
 
         #🔹 **สร้างข้อความ Context สำหรับ AI**
-        prompt = ([{"role": "system", "content": system_message}])
-        prompt += f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
+        # prompt = ([{"role": "system", "content": system_message}])
+        prompt = f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
         prompt += "\n".join(sales_data)
         prompt += "นี่คือประวัติการสนทนาเดิมของคุณ:\n"
         prompt += "\n".join(chat_history)
