@@ -31,7 +31,8 @@ AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
 AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX")
 # โหลดค่า Environment Variables
 REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = int(os.getenv("REDIS_PORT"))  # ✅ ตั้งค่าให้แน่ใจว่าใช้ 6380
+REDIS_PORT = 6380
+#REDIS_PORT = int(os.getenv("REDIS_PORT"))  # ✅ ตั้งค่าให้แน่ใจว่าใช้ 6380
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  # ใช้ Primary Key
 
 redis_client = redis.Redis(
