@@ -73,104 +73,82 @@ async def callback(request: Request):
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
-    user_message = event.message.text.strip()
+    user_message = event.message.text
 
-    # 🔹 หากผู้ใช้พิมพ์ "เริ่มการสนทนาใหม่" หรือ "reset"
     if user_message.lower() in ["เริ่มการสนทนาใหม่", "reset"]:
+        # 🔹 **ลบประวัติการสนทนาทั้งหมดของ user ออกจาก Azure Cognitive Search**
         delete_chat_history(user_id)
+
         reply_message = "สนทนาใหม่เริ่มต้นแล้วค่ะ กรุณาพิมพ์คำถามของคุณ!"
-
     else:
-        # 🔹 ตรวจสอบว่าผู้ใช้ต้องการค้นหารายการขายหรือไม่
-        if user_message.isdigit():  
-            sales_number = user_message  # ผู้ใช้ป้อนหมายเลขออเดอร์
-            sales_data = search_sales_data(sales_number, top=5)  # ค้นหารายการทั้งหมด
-            store_last_sales_query(user_id, sales_number, sales_data)  # เก็บข้อมูลใน session/cache
-            reply_message = format_sales_summary(sales_number, sales_data)
+        # 🔹 **ค้นหาประวัติการสนทนา**
+        chat_history = search_chat_history(user_id, user_message, top=5)
+        print(f"✅ ผลค้นหาประวัติการสนทนา: {chat_history}")
+        # 🔹 **ค้นหาข้อมูลการขายจาก RAG**
+        
+        sales_data = get_combined_user_history(user_id, user_message, top=5)
+        #sales_data = search_sales_data(user_message, top=3)
+        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")
 
-        elif user_message.lower().startswith("ดูรายการ"):
-            parts = user_message.split()
-            if len(parts) == 2 and parts[1].isdigit():
-                item_number = parts[1]
-                last_query = get_last_sales_query(user_id)  # ดึงข้อมูลออเดอร์ที่ค้นหาก่อนหน้า
+        # 🔹 **สร้างข้อความ Context สำหรับ AI**
+        # prompt = "นี่คือประวัติการสนทนาเดิมของคุณ:\n"
+        # prompt += "\n".join(chat_history)
+        # prompt += f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
+        # prompt += "\n".join(sales_data)
+        # prompt += f"\n\nผู้ใช้: {user_message}\nAI:"
+        prompt = """
+                คุณคือ AI ที่ช่วยเหลือในการค้นหาข้อมูล ให้ความสำคัญกับบริบทเดิมของการสนทนามากกว่าข้อมูลใหม่
+                1️⃣ **บทสนทนาเดิมที่เคยคุยกับผู้ใช้** (สำคัญที่สุด)
+                2️⃣ **ข้อมูลที่ค้นพบจากระบบ Sales** (อ้างอิงเพิ่มเติม)
+                3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
 
-                if not last_query:
-                    reply_message = "❌ ไม่พบหมายเลขออเดอร์ กรุณาระบุหมายเลขก่อน"
-                else:
-                    sales_number = last_query["sales_number"]
-                    sales_summary = last_query["sales_data"]
+                กรุณาตอบโดยเน้นให้ความสำคัญกับบทสนทนาเดิมก่อน
 
-                    # 🔹 หา Product Name หรือข้อมูลรายการที่เกี่ยวข้อง
-                    product_info = next((item for item in sales_summary if str(item["item"]) == item_number), None)
-                    if not product_info:
-                        reply_message = f"❌ ไม่พบข้อมูลของรายการที่ {item_number} ในออเดอร์ {sales_number}"
-                    else:
-                        # 🔹 สร้าง Query ใหม่เพื่อค้นหารายละเอียดเพิ่มเติม
-                        search_query = f"{sales_number} {product_info['product_name']} {product_info['quantity']}"
-                        sales_details = search_sales_details(sales_number, item_number, search_query)
-                        reply_message = format_sales_details(sales_details)
-            else:
-                reply_message = "❌ กรุณาระบุหมายเลขรายการให้ถูกต้อง เช่น 'ดูรายการ 3'"
+                🔹 **ประวัติการสนทนาเดิม**
+                {}
+                🔹 **ข้อมูลจากระบบ Sales**
+                {}
+                🔹 **ข้อความที่ผู้ใช้ถาม**
+                {}
+                """.format("\n".join(chat_history), "\n".join(sales_data), user_message)
 
+
+        # 🔹 **ส่งข้อความไปยัง Azure OpenAI**
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": AZURE_OPENAI_API_KEY
+        }
+
+        payload = {
+            "messages": [{"role": "system", "content": prompt}],
+            "max_tokens": 800,
+            "temperature": 0.0,
+            "top_p": 0.4,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0,
+            "stream": False
+        }
+
+        #response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        try:
+            response = requests.post(
+            AZURE_OPENAI_ENDPOINT, headers=headers, json=payload, timeout=10
+            )
+            response.raise_for_status()  # เช็คว่าไม่มี error ใน response
+        except requests.RequestException as e:
+            print(f"❌ OpenAI API Error: {e}")
+            reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ AI"
+
+
+        if response.status_code == 200:
+            openai_response = response.json()
+            reply_message = openai_response["choices"][0]["message"]["content"]
         else:
-            # 🔹 **ค้นหาประวัติการสนทนา**
-            chat_history = search_chat_history(user_id, user_message, top=5)
-            sales_data = search_sales_data(user_message, top=3)  # ค้นหาข้อมูลจาก Sales
-
-            # 🔹 **สร้าง Context สำหรับ AI**
-            prompt = f"""
-            คุณคือ AI ที่ช่วยเหลือในการค้นหาข้อมูล ให้ความสำคัญกับบริบทเดิมของการสนทนามากกว่าข้อมูลใหม่
-            1️⃣ **บทสนทนาเดิมที่เคยคุยกับผู้ใช้** (สำคัญที่สุด)
-            2️⃣ **ข้อมูลที่ค้นพบจากระบบ Sales** (อ้างอิงเพิ่มเติม)
-            3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
-
-            กรุณาตอบโดยเน้นให้ความสำคัญกับบทสนทนาเดิมก่อน
-
-            🔹 **ประวัติการสนทนาเดิม**
-            {chat_history}
-
-            🔹 **ข้อมูลจากระบบ Sales**
-            {sales_data}
-
-            🔹 **ข้อความที่ผู้ใช้ถาม**
-            {user_message}
-            """
-
-            # 🔹 **ส่งข้อความไปยัง Azure OpenAI**
-            headers = {
-                "Content-Type": "application/json",
-                "api-key": AZURE_OPENAI_API_KEY
-            }
-
-            payload = {
-                "messages": [{"role": "system", "content": prompt}],
-                "max_tokens": 800,
-                "temperature": 0.0,
-                "top_p": 0.4,
-                "frequency_penalty": 0.0,
-                "presence_penalty": 0.0,
-                "stream": False
-            }
-
-            try:
-                response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload, timeout=10)
-                response.raise_for_status()
-                openai_response = response.json()
-                reply_message = openai_response["choices"][0]["message"]["content"]
-            except requests.RequestException as e:
-                print(f"❌ OpenAI API Error: {e}")
-                reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ AI"
+            reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
         # 🔹 **บันทึกการสนทนาเข้า Azure Cognitive Search**
         save_chat(user_id, user_message)
         save_chat(user_id, reply_message)
-
-    # 🔹 **ส่งข้อความตอบกลับไปยัง Line**
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_message)
-    )
-
 
     # สร้างปุ่ม Quick Reply
     quick_reply_buttons = QuickReply(items=[
@@ -184,7 +162,7 @@ def handle_message(event):
         TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
     )
 
-
+# 🔹 **ฟังก์ชันลบบทสนทนาเก่าของผู้ใช้จาก Azure Cognitive Search**
 def delete_chat_history(user_id):
     try:
         results = chat_history_client.search(search_text="*", filter=f"user_id eq '{user_id}'")
@@ -215,6 +193,44 @@ def search_chat_history(user_id, query, top=5):
     except Exception as e:
         print(f"❌ Error fetching chat history: {e}")
         return []
+    
+
+def get_combined_user_history(user_id, user_message, top=5):
+    try:
+        # ดึงประวัติข้อความที่ user เคยถาม
+        user_history = search_chat_history_User(user_id, query="*", top=top)
+
+        # รวมข้อความ user_message เข้าไปในประวัติ
+        if user_history:
+            combined_text = f"{user_history}\n{user_message}"
+        else:
+            combined_text = user_message  # ถ้าไม่มีประวัติ ให้ใช้ user_message อย่างเดียว
+
+        return combined_text
+    except Exception as e:
+        print(f"❌ Error combining chat history: {e}")
+        return user_message  # คืน user_message ถ้ามี error
+
+    
+def search_chat_history_User(user_id, query, top=5):
+    try:
+        results = chat_history_client.search(
+            search_text="*", filter=f"user_id eq '{user_id}'", top=top
+        )
+        chat_history = sorted(
+            [{"message": result["message"], "timestamp": result.get("timestamp", "")} for result in results],
+            key=lambda x: x["timestamp"], reverse=True
+        )
+        
+        # กรองเฉพาะข้อความที่เป็นของ User เท่านั้น
+        user_questions = [entry["message"] for entry in chat_history if entry["message"].startswith("User:")]
+
+        # รวมกันเป็นข้อความเดียว (แต่ละบรรทัดคั่นด้วย \n)
+        return "\n".join(user_questions) if user_questions else None
+    except Exception as e:
+        print(f"❌ Error fetching chat history: {e}")
+        return None
+
 
 # 🔹 บันทึกข้อความลง Azure Cognitive Search
 
@@ -231,28 +247,22 @@ def save_chat(user_id, message):
     except Exception as e:
         print(f"❌ เกิดข้อผิดพลาดในการบันทึก: {e}")
 
+
+
+
+
 # 🔹 ค้นหาข้อมูลการขายจาก RAG
-def search_sales_data(query, sales_number=None, top=3):
-    """ ค้นหาข้อมูลการขายจาก Azure Cognitive Search โดยใช้หมายเลขออเดอร์เป็นเงื่อนไข (ถ้ามี) """
+
+# def search_sales_data(query, top=3):
+#     results = sales_data_client.search(search_text=query, top=top)
+#     return [result["chunk"] for result in results] if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
+def search_sales_data(query, top=3):
     try:
-        if sales_number:
-            # 🔹 ค้นหาเฉพาะรายการที่อยู่ในหมายเลขออเดอร์ที่ระบุ
-            filter_query = f"sales_doc eq '{sales_number}'"
-        else:
-            filter_query = None  # ค้นหาทั่วไปถ้าไม่มี sales_number
-
-        results = sales_data_client.search(
-            search_text=query, 
-            filter=filter_query,  
-            top=top
-        )
-        
+        results = sales_data_client.search(search_text=query, top=top)
         return [result["chunk"] for result in results] if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
-
     except Exception as e:
         print(f"❌ Error fetching sales data: {e}")
         return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
-
 
 
 if __name__ == "__main__":
