@@ -1,3 +1,4 @@
+#main_BCK08_loop2_ok.py
 import os
 import datetime
 import requests
@@ -163,9 +164,9 @@ def handle_message(event):
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
         # 🔹 **บันทึกการสนทนาเข้า Azure Cognitive Search**
-        save_chat(user_id, f"user: {user_message}")
-        save_chat(user_id, f"AI: {reply_message}")
-        
+        save_chat(user_id, user_message)
+        save_chat(user_id, reply_message)
+
     # สร้างปุ่ม Quick Reply
     quick_reply_buttons = QuickReply(items=[
         QuickReplyButton(action=MessageAction(label="🔄 เริ่มใหม่", text="เริ่มการสนทนาใหม่")),
