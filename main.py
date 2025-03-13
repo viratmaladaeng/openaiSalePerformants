@@ -9,10 +9,13 @@ from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import redis
+from dotenv import load_dotenv
 
 # โหลดค่า Environment Variables
 load_dotenv()
+
 
 # สร้าง FastAPI instance
 app = FastAPI()
@@ -26,6 +29,12 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_KEY = os.getenv("AZURE_SEARCH_KEY")
 AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
 AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX")
+# โหลดค่า Environment Variables
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))  # Azure Redis ใช้ 6380 สำหรับ SSL
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
+
 
 # ตรวจสอบค่าที่จำเป็น
 if not all([
@@ -40,6 +49,20 @@ openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-02-15-preview"
+
+redis_client = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    password=REDIS_PASSWORD,
+    ssl=True,  # ✅ ใช้ SSL/TLS
+    decode_responses=True
+)
+
+import json
+from datetime import timedelta
+
+
+
 
 # ตั้งค่า Azure Cognitive Search
 chat_history_client = SearchClient(
@@ -77,25 +100,25 @@ def handle_message(event):
 
     if user_message.lower() in ["เริ่มการสนทนาใหม่", "reset"]:
         # 🔹 **ลบประวัติการสนทนาทั้งหมดของ user ออกจาก Azure Cognitive Search**
-        delete_chat_history(user_id)
+        delete_chat_historyR(user_id)
         reply_message = "สนทนาใหม่เริ่มต้นแล้วค่ะ กรุณาพิมพ์คำถามของคุณ!"
 
     else:
-        chat_history = search_chat_history(user_id, user_message, top=5)
-        print(f"✅ ผลค้นหาประวัติการสนทนา: {chat_history}")
+        chat_history = get_chat_history(user_id)
+        print(f"✅ ผลการค้นหา (get_chat_history): {chat_history}")
+        chat_history.append(f"User: {user_message}")
         
-        # 🔹 **ค้นหาข้อมูลการขายจาก RAG**
-        get_combined_sales_data = get_combined_user_history(user_id, user_message, top=5)
-        #get_combined_sales_data = get_combined_user_history_oldest(user_id, user_message)
+       
 
-        if get_combined_sales_data:
-            print(f"✅ ข้อความที่ใช้ค้นหา (จากเก่าสุด): {get_combined_sales_data}")  # Debugging print
-            sales_data = search_sales_data(get_combined_sales_data, top=3)
+        if chat_history:
+            print(f"✅ ข้อความที่ใช้ค้นหา (จากเก่าสุด): {chat_history}")  # Debugging print
+            sales_data = search_sales_data(chat_history, top=3)
         else:
             print("⚠️ ไม่มีข้อมูลประวัติ ใช้ข้อความ User ปัจจุบันแทน")
             sales_data = search_sales_data(user_message, top=3)
 
-        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")
+        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")        
+
 
 
         #🔹 **สร้างข้อความ Context สำหรับ AI**
@@ -110,23 +133,7 @@ def handle_message(event):
                     2️⃣ **นี่คือประวัติการสนทนาเดิมของคุณ** (อ้างอิงเพิ่มเติม)
                     3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
                     """
-        # prompt += """
-        #         คุณคือ AI ที่ช่วยเหลือในการค้นหาข้อมูล ให้ความสำคัญกับข้อมูลการขายที่เกี่ยวข้องมากกว่าบริบทเดิมของการสนทนา
-        #         1️⃣ **ข้อมูลการขายที่เกี่ยวข้อง** (สำคัญที่สุด)
-        #         2️⃣ **บทสนทนาเดิมที่เคยคุยกับผู้ใช้** (อ้างอิงเพิ่มเติม)
-        #         3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
-
-        #         กรุณาตอบโดยเน้นให้ความสำคัญกับบทสนทนาเดิมก่อน
-
-        #         🔹 **ข้อมูลจากระบบ Sales**
-        #         {}
-        #         🔹 **ประวัติการสนทนาเดิม**
-        #         {}
-        #         🔹 **ข้อความที่ผู้ใช้ถาม**
-        #         {}
-        #         """.format("\n ข้อมูลจากระบบ Sales".join(sales_data),"\n ประวัติการสนทนาเดิม".join(chat_history),  user_message)
-
-
+        
         # 🔹 **ส่งข้อความไปยัง Azure OpenAI**
         headers = {
             "Content-Type": "application/json",
@@ -137,7 +144,7 @@ def handle_message(event):
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": 800,
             "temperature": 0.0,
-            "top_p": 0.3,
+            "top_p": 1.0,
             "frequency_penalty": 0.0,
             "presence_penalty": 0.0,
             "stop": ["เริ่มการสนทนาใหม่"],
@@ -162,8 +169,11 @@ def handle_message(event):
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
         # 🔹 **บันทึกการสนทนาเข้า Azure Cognitive Search**
-        save_chat(user_id, user_message)
-        save_chat(user_id, reply_message)
+        save_chatRedis(user_id, f"User: {user_message}")
+        save_chatRedis(user_id, f"AI: {reply_message}")
+
+
+
 
     # สร้างปุ่ม Quick Reply
     quick_reply_buttons = QuickReply(items=[
@@ -177,111 +187,6 @@ def handle_message(event):
         TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
     )
 
-# 🔹 **ฟังก์ชันลบบทสนทนาเก่าของผู้ใช้จาก Azure Cognitive Search**
-
-
-
-
-# 🔹 ค้นหาประวัติการสนทนา
-
-def search_chat_history(user_id, query, top=5):
-    try:
-        results = chat_history_client.search(
-            search_text="*", filter=f"user_id eq '{user_id}'", top=top
-        )
-        chat_history = sorted(
-            [{"message": result["message"], "timestamp": result.get("timestamp", "")} for result in results],
-            key=lambda x: x["timestamp"], reverse=True
-        )
-        return [entry["message"] for entry in chat_history] if chat_history else []
-    except Exception as e:
-        print(f"❌ Error fetching chat history: {e}")
-        return []
-    
-
-def get_combined_user_history_oldest(user_id, user_message):
-    try:
-        # ดึงประวัติข้อความที่ User เคยถาม โดยเรียงจากเก่าสุดไปใหม่สุด
-        user_history = search_chat_history_oldest(user_id)
-        print(f"🔍 ประวัติที่รวมกันเรียงจากเก่าไปใหม่: \n{user_history}")  # Debugging print
-
-        # ตรวจสอบว่ามีข้อความที่เก่าสุดหรือไม่
-        if user_history:
-            combined_text = f" User ถามต่อว่า {user_message}\n จากคำถามแรกที่ {user_history}"  # รวมข้อความเก่าสุด + ข้อความปัจจุบัน
-        else:
-            combined_text = user_message  # ถ้าไม่มีประวัติ ใช้เฉพาะข้อความปัจจุบัน
-
-        print(f"🔍 ประวัติที่รวมกัน (จากเก่าสุดไปใหม่สุด): \n{combined_text}")  # Debugging print
-
-        return combined_text
-    except Exception as e:
-        print(f"❌ Error combining chat history: {e}")
-        return user_message  # คืนค่า user_message ถ้ามี error
-
-
-
-def search_chat_history_oldest(user_id):
-    try:
-        # ดึงข้อมูลทั้งหมดที่เป็นไปได้ (กำหนด top สูงไว้เพื่อให้แน่ใจว่าได้ข้อความแรกสุด)
-        results = chat_history_client.search(
-            search_text="*", filter=f"user_id eq '{user_id}'", top=1000  # ดึงข้อมูลให้มากที่สุด
-        )
-
-        # วนลูปดึงข้อมูลมาเก็บเป็นลิสต์
-        chat_history = [
-            {"message": item["message"], "timestamp": item.get("timestamp", "")} for item in results
-        ]
-
-        # ตรวจสอบว่ามีข้อมูลหรือไม่
-        if not chat_history:
-            return None  # ถ้าไม่มีข้อมูล ให้คืนค่า None
-
-        # เรียงลำดับจากเก่าสุด → ใหม่สุด
-        oldest_message = sorted(chat_history, key=lambda x: x["timestamp"], reverse=False)[0]["message"]
-
-        return oldest_message
-    except Exception as e:
-        print(f"❌ Error fetching oldest chat history: {e}")
-        return None
-
-
-def get_combined_user_history(user_id, user_message, top=5):
-    try:
-        # ดึงประวัติข้อความที่ user เคยถาม
-        user_history = search_chat_history(user_id, query="*", top=top)
-
-        # เช็คว่ามีประวัติหรือไม่
-        if user_history:
-            combined_text = "\n".join(user_history)  # รวมข้อความทั้งหมดเป็นชุดเดียว
-            combined_text += f"\n{user_message}"  # รวมข้อความปัจจุบันเข้าไป
-        else:
-            combined_text = user_message  # ถ้าไม่มีประวัติ ใช้เฉพาะข้อความปัจจุบัน
-
-        print(f"🔍 ประวัติที่รวมกัน: \n{combined_text}")  # Debugging print
-
-        return combined_text
-    except Exception as e:
-        print(f"❌ Error combining chat history: {e}")
-        return user_message  # คืนค่า user_message ถ้ามี error
-
-
-# 🔹 บันทึกข้อความลง Azure Cognitive Search
-
-def save_chat(user_id, message):
-    document = {
-        "id": f"{user_id}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
-        "user_id": user_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "message": message
-    }
-    try:
-        chat_history_client.upload_documents(documents=[document])
-        print(f"✅ บันทึกข้อความสำเร็จ: {document}")
-    except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการบันทึก: {e}")
-
-
-
 def search_sales_data(query, top=3):
     try:
         results = sales_data_client.search(search_text=query, top=top)
@@ -289,19 +194,40 @@ def search_sales_data(query, top=3):
     except Exception as e:
         print(f"❌ Error fetching sales data: {e}")
         return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
-    
-def delete_chat_history(user_id):
-    try:
-        results = chat_history_client.search(search_text="*", filter=f"user_id eq '{user_id}'")
-        document_ids = [result["id"] for result in results]
 
-        if document_ids:
-            chat_history_client.delete_documents(documents=[{"id": doc_id} for doc_id in document_ids])
-            print(f"✅ ลบบทสนทนาทั้งหมดของ {user_id} สำเร็จ!")
-        else:
-            print(f"❌ ไม่พบข้อมูลสนทนาเก่าของ {user_id}")
-    except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการลบประวัติการสนทนา: {e}")    
+def save_chatRedis(user_id, message):
+    """บันทึกข้อความสนทนาลง Redis"""
+    chat_key = f"chat_history:{user_id}"
+    
+    # ดึงประวัติแชทเก่าจาก Redis
+    chat_history = redis_client.get(chat_key)
+    chat_history = json.loads(chat_history) if chat_history else []
+
+    # เพิ่มข้อความใหม่
+    chat_history.append(message)
+
+    # บันทึกกลับเข้า Redis พร้อมกำหนด TTL (เช่น 24 ชั่วโมง)
+    redis_client.setex(chat_key, timedelta(hours=24), json.dumps(chat_history))
+    
+    print(f"✅ บันทึกข้อความสำเร็จ: {message}")
+
+# 🔹 ค้นหาประวัติการสนทนา
+def get_chat_history(user_id):
+    """ดึงประวัติแชทจาก Redis"""
+    chat_key = f"chat_history:{user_id}"
+    chat_history = redis_client.get(chat_key)
+    
+    if chat_history:
+        return json.loads(chat_history)
+    return []
+
+def delete_chat_historyR(user_id):
+    """ลบประวัติแชทของผู้ใช้"""
+    chat_key = f"chat_history:{user_id}"
+    redis_client.delete(chat_key)
+    print(f"🗑️ ลบประวัติแชทของ {user_id} สำเร็จ!")
+
+
 
 
 if __name__ == "__main__":

@@ -8,3 +8,4 @@ line-bot-sdk
 openai
 azure-ai-inference
 azure-identity
+redis
