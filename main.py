@@ -29,13 +29,16 @@ AZURE_SEARCH_KEY = os.getenv("AZURE_SEARCH_KEY")
 AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
 AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX")
 
+
 # ตรวจสอบค่าที่จำเป็น
 if not all([
     LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, 
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
-    AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY
+    AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY,
+    AZURE_CHAT_HISTORY_INDEX, AZURE_SALES_INDEX
 ]):
     raise ValueError("Environment variables not set properly")
+
 
 # Initialize Azure OpenAI
 openai.api_type = "azure"
@@ -71,6 +74,8 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     return "OK"
+
+
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -270,12 +275,22 @@ def get_combined_user_history(user_id, user_message, top=5):
 # 🔹 บันทึกข้อความลง Azure Cognitive Search
 
 def save_chat(user_id, message):
+    # document = {
+    #     "id": f"{user_id}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
+    #     "user_id": user_id,
+    #     "timestamp": datetime.now(timezone.utc).isoformat(),
+    #     "message": message
+    # }
+    import uuid
     document = {
-        "id": f"{user_id}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
+        "id": str(uuid.uuid4()),  # ใช้ UUID แทน timestamp
         "user_id": user_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "message": message
     }
+
+
+
     try:
         chat_history_client.upload_documents(documents=[document])
         print(f"✅ บันทึกข้อความสำเร็จ: {document}")
