@@ -31,20 +31,24 @@ AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
 AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX")
 # โหลดค่า Environment Variables
 REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = 6380
-#REDIS_PORT = int(os.getenv("REDIS_PORT"))  # ✅ ตั้งค่าให้แน่ใจว่าใช้ 6380
+#REDIS_PORT = 6380
+REDIS_PORT = int(os.getenv("REDIS_PORT"))  # ✅ ตั้งค่าให้แน่ใจว่าใช้ 6380
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  # ใช้ Primary Key
 
-redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASSWORD,
-    ssl=True,  # ✅ ใช้ SSL/TLS
-    decode_responses=True
-)
 
 
-
+try:
+    redis_client = redis.StrictRedis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=True  # ต้องเปิดใช้งาน SSL
+    )
+    redis_client.set("test", "Hello Redis!")  # ลองเขียนค่าเข้า Redis
+    value = redis_client.get("test")  # ลองอ่านค่าจาก Redis
+    print("Connected to Redis successfully! Value from Redis:", value.decode())
+except Exception as e:
+    print(f"Redis Connection Error: {e}")
 
 # ตรวจสอบค่าที่จำเป็น
 if not all([
