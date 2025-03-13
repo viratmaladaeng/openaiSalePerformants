@@ -31,8 +31,17 @@ AZURE_CHAT_HISTORY_INDEX = os.getenv("AZURE_CHAT_HISTORY_INDEX")
 AZURE_SALES_INDEX = os.getenv("AZURE_SALES_INDEX")
 # โหลดค่า Environment Variables
 REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))  # Azure Redis ใช้ 6380 สำหรับ SSL
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_PORT = int(os.getenv("REDIS_PORT"))  # ✅ ตั้งค่าให้แน่ใจว่าใช้ 6380
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  # ใช้ Primary Key
+
+redis_client = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    password=REDIS_PASSWORD,
+    ssl=True,  # ✅ ใช้ SSL/TLS
+    decode_responses=True
+)
+
 
 
 
@@ -49,14 +58,6 @@ openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-02-15-preview"
-
-redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASSWORD,
-    ssl=True,  # ✅ ใช้ SSL/TLS
-    decode_responses=True
-)
 
 import json
 from datetime import timedelta
