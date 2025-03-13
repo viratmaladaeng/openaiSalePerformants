@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 # โหลดค่า Environment Variables
 load_dotenv()
 
-
 # สร้าง FastAPI instance
 app = FastAPI()
 
@@ -37,19 +36,6 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  # ใช้ Primary Key
 
 
 
-try:
-    redis_client = redis.StrictRedis(
-        host=REDIS_HOST,
-        port=REDIS_PORT,
-        password=REDIS_PASSWORD,
-        ssl=True  # ต้องเปิดใช้งาน SSL
-    )
-    redis_client.set("test", "Hello Redis!")  # ลองเขียนค่าเข้า Redis
-    value = redis_client.get("test")  # ลองอ่านค่าจาก Redis
-    print("Connected to Redis successfully! Value from Redis:", value.decode())
-except Exception as e:
-    print(f"Redis Connection Error: {e}")
-
 # ตรวจสอบค่าที่จำเป็น
 if not all([
     LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, 
@@ -67,6 +53,13 @@ openai.api_version = "2024-02-15-preview"
 import json
 from datetime import timedelta
 
+redis_client = redis.Redis(
+    host=REDIS_HOST,  # ✅ ชื่อเซิร์ฟเวอร์ Redis (ต้องเป็นค่า Azure Redis Cache)
+    port=REDIS_PORT,  # ✅ ต้องใช้ `port=6380` (SSL Port)
+    password=REDIS_PASSWORD,  # ✅ ใส่ Primary Key ของ Redis
+    ssl=True,  # ✅ ใช้ SSL/TLS (จำเป็น เพราะ Non-SSL Port ถูกปิด)
+    decode_responses=True  # ✅ แปลงค่าที่ได้จาก Redis เป็น string อัตโนมัติ
+)
 
 
 
