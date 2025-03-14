@@ -13,7 +13,7 @@ import datetime
 from datetime import datetime, timezone, timedelta
 import redis
 import json
-
+from linebot.models import TextSendMessage
 load_dotenv()
 
 # สร้าง FastAPI instance
@@ -127,36 +127,48 @@ def handle_message(event):
 
     else:
         
+        # ดึงประวัติการสนทนา
         chat_history = get_chat_history(user_id)
-        print(f"✅ ผลการค้นหา (get_chat_history): {chat_history}")
+        if not isinstance(chat_history, list):
+            chat_history = []  # ตั้งค่าเป็น list ว่างถ้าไม่ได้รับข้อมูลที่ถูกต้อง
+
+        print(f"✅ ประวัติแชท: {chat_history}")  # Debugging
+
+        # เพิ่มข้อความของผู้ใช้ลงไปในแชท
         chat_history.append(f"User: {user_message}")
 
-        if chat_history:
-            print(f"✅ ข้อความที่ใช้ค้นหา (จากเก่าสุด): {chat_history}")  # Debugging print
-            sales_data = search_sales_data(chat_history, top=3)
-        else:
-            print("⚠️ ไม่มีข้อมูลประวัติ ใช้ข้อความ User ปัจจุบันแทน")
-            sales_data = search_sales_data(user_message, top=3)
-            sales_data.append({"role": "assistant", "content": reply_message})
+        # 🔹 แปลง chat_history เป็นข้อความเดียว
+        search_query = " ".join(chat_history) if chat_history else user_message
 
-        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")        
+        # 🔹 ค้นหาข้อมูลการขายจาก Azure Cognitive Search
+        sales_data = search_sales_data(search_query, top=3)
 
-        chat_history.append([{"role": "system", "content": system_message}])
+        print(f"✅ ค้นหาข้อมูลการขายจาก: {search_query}")  # Debugging
+        print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")  # Debugging
 
-        #🔹 **สร้างข้อความ Context สำหรับ AI**
-        # prompt = ([{"role": "system", "content": system_message}])
+
+        # เพิ่ม system_message โดยไม่ทำให้กลายเป็น list ซ้อนกัน
+        chat_history.append({"role": "system", "content": system_message})
+
+        # สร้าง prompt
         prompt = f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
-        prompt += "\n".join(sales_data)
-        prompt += "นี่คือประวัติการสนทนาเดิมของคุณ:\n"
-        prompt += "\n".join(chat_history)
+        prompt += "\n".join([str(item) for item in sales_data])  # ต้องมีข้อมูลนี้
+        prompt += "\n\nนี่คือประวัติการสนทนาเดิมของคุณ:\n"
+        prompt += "\n".join([json.dumps(item, ensure_ascii=False) for item in chat_history])  
         prompt += f"\n\nผู้ใช้: {user_message}\n AI:"
+
+        # เพิ่ม system_message และ grounding_text เข้าไป
+        #prompt += f"\n\n---\n🛠 **System Message**:\n{system_message}"
+        #prompt += f"\n\n🌍 **Grounding Information**:\n{grounding_text}"
+
         prompt += """
-            คุณคือ AI ที่ช่วยเหลือในการค้นหาข้อมูล ให้ความสำคัญกับข้อมูลการขายที่เกี่ยวข้องมากกว่าบริบทเดิมของการสนทนานี่คือประวัติการสนทนาเดิมของคุณ
-                    1️⃣ **ข้อมูลการขายที่เกี่ยวข้อง** (สำคัญที่สุด)
-                    2️⃣ **นี่คือประวัติการสนทนาเดิมของคุณ** (อ้างอิงเพิ่มเติม)
-                    3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
-                    """
-        
+            คุณคือ AI ที่ช่วยเหลือในการค้นหาข้อมูล ให้ความสำคัญกับข้อมูลการขายที่เกี่ยวข้องมากกว่าบริบทเดิมของการสนทนา
+            นี่คือลำดับความสำคัญของข้อมูล:
+                1️⃣ **ข้อมูลการขายที่เกี่ยวข้อง** (สำคัญที่สุด)
+                2️⃣ **นี่คือประวัติการสนทนาเดิมของคุณ** (อ้างอิงเพิ่มเติม)
+                3️⃣ **ข้อความที่ผู้ใช้ถามล่าสุด**
+            """
+
         # 🔹 **ส่งข้อความไปยัง Azure OpenAI**
         headers = {
             "Content-Type": "application/json",
@@ -167,35 +179,39 @@ def handle_message(event):
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": 800,
             "temperature": 0.0,
-            "top_p": 1.0,
+            "top_p": 0.4,
             "frequency_penalty": 0.0,
             "presence_penalty": 0.0,
             "stop": ["เริ่มการสนทนาใหม่"],
             "stream": False
         }
-
-        #response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        def split_message(text, max_length=5000):
+            return [text[i:i + max_length] for i in range(0, len(text), max_length)]
         try:
-            response = requests.post(
-            AZURE_OPENAI_ENDPOINT, headers=headers, json=payload, timeout=10
-            )
-            response.raise_for_status()  # เช็คว่าไม่มี error ใน response
+            response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+            openai_response = response.json()
+
+            if "choices" in openai_response and openai_response["choices"]:
+                reply_message = openai_response["choices"][0]["message"]["content"]
+
+                # 🔹 เพิ่มข้อมูลการขายที่ค้นพบ
+                formatted_sales_data = "\n".join([f"🔹 {item}" for item in sales_data])
+
+                full_message = f"{reply_message}\n\n🔎 ข้อมูลการขายที่พบ:\n{formatted_sales_data}"
+                messages = [TextSendMessage(text=msg) for msg in split_message(full_message)]
+
+            else:
+                messages = [TextSendMessage(text="ขออภัย ระบบไม่สามารถให้คำตอบได้")]
+
         except requests.RequestException as e:
             print(f"❌ OpenAI API Error: {e}")
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ AI"
 
 
-        if response.status_code == 200:
-            openai_response = response.json()
-            reply_message = openai_response["choices"][0]["message"]["content"]
-        else:
-            reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
-
-        # 🔹 **บันทึกการสนทนาเข้า Azure Cognitive Search**
+        # บันทึกลง Redis
         save_chatRedis(user_id, f"User: {user_message}")
         save_chatRedis(user_id, f"AI: {reply_message}")
-
-
 
 
     # สร้างปุ่ม Quick Reply
@@ -205,11 +221,15 @@ def handle_message(event):
     ])
 
     # ส่งข้อความกลับไปยัง Line พร้อม Quick Reply
+    MAX_LENGTH = 5000
+    if len(reply_message) > MAX_LENGTH:
+        reply_message = reply_message[:MAX_LENGTH] + "\n... (ข้อความยาวเกินไป ถูกตัดออก)"
+
+    # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
     )
-
 
    
 def search_sales_data(query, top=3):
