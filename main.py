@@ -13,7 +13,9 @@ import datetime
 from datetime import datetime, timezone, timedelta
 import redis
 import json
-from linebot.models import TextSendMessage
+from linebot.models import VideoSendMessage
+
+
 load_dotenv()
 
 # สร้าง FastAPI instance
@@ -120,6 +122,9 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
 
+        # 🔹 1. ส่ง GIF "กำลังพิมพ์..." ก่อน (Typing Indicator)
+
+
     if user_message.lower() in ["เริ่มการสนทนาใหม่", "reset"]:
         # 🔹 **ลบประวัติการสนทนาทั้งหมดของ user ออกจาก Azure Cognitive Search**
         delete_chat_historyR(user_id)
@@ -141,7 +146,7 @@ def handle_message(event):
         search_query = " ".join(chat_history) if chat_history else user_message
 
         # 🔹 ค้นหาข้อมูลการขายจาก Azure Cognitive Search
-        sales_data = search_sales_data(search_query, top=3)
+        sales_data = search_sales_data(search_query, top=10)
 
         print(f"✅ ค้นหาข้อมูลการขายจาก: {search_query}")  # Debugging
         print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")  # Debugging
@@ -151,11 +156,11 @@ def handle_message(event):
         chat_history.append({"role": "system", "content": system_message})
 
         # สร้าง prompt
-        prompt = f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
+        prompt = f"\n\nsearch_sales_data:\n"
         prompt += "\n".join([str(item) for item in sales_data])  # ต้องมีข้อมูลนี้
-        prompt += "\n\nนี่คือประวัติการสนทนาเดิมของคุณ:\n"
+        prompt += "\n\nchat_history:\n"
         prompt += "\n".join([json.dumps(item, ensure_ascii=False) for item in chat_history])  
-        prompt += f"\n\nผู้ใช้: {user_message}\n AI:"
+        prompt += f"\n\nUser: {user_message}\n AI:"
 
         # เพิ่ม system_message และ grounding_text เข้าไป
         #prompt += f"\n\n---\n🛠 **System Message**:\n{system_message}"
@@ -232,13 +237,163 @@ def handle_message(event):
     )
 
    
-def search_sales_data(query, top=3):
+def search_sales_data(query, top=10):  
     try:
-        results = sales_data_client.search(search_text=query, top=top)
-        return [result["chunk"] for result in results] if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
+        search_results = sales_data_client.search(search_text=query, top=top)
+
+        results = []
+        for result in search_results:
+            filtered_result = {
+                "Sales_document": result.get("Sales_document", ""),
+                "Sales_document_item": result.get("Sales_document_item", ""),
+                "Billing_document": result.get("Billing_document", ""),
+                "Billing_item": result.get("Billing_item", ""),
+                "Sales_Order_Created_Date": result.get("Sales_Order_Created_Date", ""),
+                "Delivery": result.get("Delivery", ""),
+                "Billing_Date": result.get("Billing_Date", ""),
+                "CalMonth": result.get("CalMonth", ""),
+                "Sales_Organization": result.get("Sales_Organization", ""),
+                "Distribution_Channel_-_Key": result.get("Distribution_Channel_-_Key", ""),
+                "Distribution_Channel_-_Text": result.get("Distribution_Channel_-_Text", ""),
+                "Sales_Code": result.get("Sales_Code", ""),
+                "Selling_Unit": result.get("Selling_Unit", ""),
+                
+                # Buyer Information
+                "Buyer_Name": result.get("Buyer_Name", ""),
+                "Buyer_Address": f"{result.get('Buyer_Address1', '')} {result.get('Buyer_Address2', '')} {result.get('Buyer_Address3', '')}".strip(),
+                "Buyer_Zip_Code": result.get("Buyer_Zip_Code", ""),
+                "Buyer_Phone": result.get("Buyer_Phone", ""),
+                "Buyer_Mobile": result.get("Buyer_Mobile", ""),
+                "Tax_No": result.get("Tax_No", ""),
+                "Tax_No2": result.get("Tax_No2", ""),
+                
+                # Recipient Information
+                "Recipient": result.get("Recipient", ""),
+                "Recipient_Address": f"{result.get('Recipient_Address1', '')} {result.get('Recipient_Address2', '')} {result.get('Recipient_Address3', '')}".strip(),
+                "Recipient_Zip_Code": result.get("Recipient_Zip_Code", ""),
+                "Recipient_Phone": result.get("Recipient_Phone", ""),
+                "Recipient_Mobile": result.get("Recipient_Mobile", ""),
+                
+                # Product Information
+                "Material_-_Key": result.get("Material_-_Key", ""),
+                "Sales_doc._type": result.get("Sales_doc._type", ""),
+                "Quotation_Number_-_Sales_Rep./OSR_(Text)": result.get("Quotation_Number_-_Sales_Rep./OSR_(Text)", ""),
+                "Project_Class": result.get("Project_Class", ""),
+                "Ship-To_Party_-_Key": result.get("Ship-To_Party_-_Key", ""),
+                "Sold-To_(Sales)_-_Sales_Office_/_ISR_1_(Text)": result.get("Sold-To_(Sales)_-_Sales_Office_/_ISR_1_(Text)", ""),
+                
+                "product_hierarchy_level_1": result.get("product_hierarchy_level_1", ""),
+                "product_hierarchy_level_2": result.get("product_hierarchy_level_2", ""),
+                "brand": result.get("brand", ""),
+                "product_family": result.get("product_family", ""),
+                "product_sub_family": result.get("product_sub_family", ""),
+                
+                # Quotation & Pricing
+                "Quotation_Number_-_Project_Owner_(Key)": result.get("Quotation_Number_-_Project_Owner_(Key)", ""),
+                "Quotation_Number_-_Project_Owner_(Text)": result.get("Quotation_Number_-_Project_Owner_(Text)", ""),
+                "Quantity_Purchased": result.get("Quantity_Purchased", ""),
+                "Purchase_Value": result.get("Purchase_Value", ""),
+                "net_price": result.get("net_price", ""),
+                "list_price": result.get("list_price", ""),
+                
+                # Combine Fields
+               # "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | {result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | {result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | {result.get('brand', '')} | {result.get('product_family', '')} | {result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
+            }
+            
+            results.append(filtered_result)  
+
+        return results if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
+    
     except Exception as e:
         print(f"❌ Error fetching sales data: {e}")
         return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
+
+# def search_sales_data(query, top=10):
+#     try:
+#         search_results = sales_data_client.search(search_text=query, top=top)
+
+#         results = []
+#         for result in search_results:
+#             filtered_result = {
+#                 # ข้อมูลเอกสาร
+#                 "Sales_document": result.get("Sales document", ""),
+#                 "Sales_document_item": result.get("Sales document item", ""),
+#                 "Billing_document": result.get("Billing document", ""),
+#                 "Billing_item": result.get("Billing item", ""),
+#                 "Sales_Order_Created_Date": result.get("Sales Order Created Date", ""),
+#                 "Delivery": result.get("Delivery", ""),
+#                 "Billing_Date": result.get("Billing Date", ""),
+#                 "CalMonth": result.get("CalMonth", ""),
+                
+#                 # ข้อมูลการขาย
+#                 "Sales_Organization": result.get("Sales Organization", ""),
+#                 "Distribution_Channel_Key": result.get("Distribution Channel - Key", ""),
+#                 "Distribution_Channel_Text": result.get("Distribution Channel - Text", ""),
+#                 "Sales_Code": result.get("รหัสขาย", ""),
+#                 "Selling_Unit": result.get("หน่วยงานที่ขาย", ""),
+                
+#                 # ข้อมูลผู้ซื้อ
+#                 "Buyer_Name": result.get("ชื่อผู้ซื้อ", ""),
+#                 "Buyer_Address": f"{result.get('ที่อยู่ผู้ซื้อ1', '')} {result.get('ที่อยู่ผู้ซื้อ2', '')} {result.get('ที่อยู่ผู้ซื้อ3', '')}".strip(),
+#                 "Buyer_Zip_Code": result.get("รหัสไปรษณีย์ผู้ซื้อ", ""),
+#                 "Buyer_Phone": result.get("เบอร์โทรผู้ซื้อ", ""),
+#                 "Buyer_Mobile": result.get("Mobile ผู้ซื้อ", ""),
+#                 "Tax_No": result.get("Tax No", ""),
+#                 "Tax_No2": result.get("Tax No2", ""),
+                
+#                 # ข้อมูลผู้รับสินค้า
+#                 "Recipient": result.get("ผู้รับสินค้า", ""),
+#                 "Recipient_Address": f"{result.get('ที่อยู่ผู้รับ1', '')} {result.get('ที่อยู่ผู้รับ2', '')} {result.get('ที่อยู่ผู้รับ3', '')}".strip(),
+#                 "Recipient_Zip_Code": result.get("รหัสไปรษณีย์ผู้รับ", ""),
+#                 "Recipient_Phone": result.get("เบอร์โทรผู้รับ", ""),
+#                 "Recipient_Mobile": result.get("Mobile ผู้รับ", ""),
+                
+#                 # ข้อมูลสินค้า
+#                 "Material_Key": result.get("Material - Key", ""),
+#                 "Sales_doc_type": result.get("Sales doc. type", ""),
+#                 "Quotation_Number_Sales_Rep_OSR_Text": result.get("Quotation Number - Sales Rep./OSR (Text)", ""),
+#                 "Project_Class": result.get("Project_Class", ""),
+#                 "Ship_To_Party_Key": result.get("Ship-To Party - Key", ""),
+#                 "Sold_To_Sales_Sales_Office_ISR_1_Text": result.get("Sold-To (Sales) - Sales Office / ISR 1 (Text)", ""),
+                
+#                 "product_hierarchy_level_1": result.get("product_hierarchy_level_1", ""),
+#                 "product_hierarchy_level_2": result.get("product_hierarchy_level_2", ""),
+#                 "brand": result.get("brand", ""),
+#                 "product_family": result.get("product_family", ""),
+#                 "product_sub_family": result.get("product_sub_family", ""),
+                
+#                 # ข้อมูลใบเสนอราคาและราคา
+#                 "Quotation_Number_Project_Owner_Key": result.get("Quotation Number - Project Owner (Key)", ""),
+#                 "Quotation_Number_Project_Owner_Text": result.get("Quotation Number - Project Owner (Text)", ""),
+#                 "Quantity_Purchased": result.get("จำนวนที่ซื้อ", ""),
+#                 "Purchase_Value": result.get("มูลค่าที่ซื้อ", ""),
+#                 "net_price": result.get("net price", ""),
+#                 "list_price": result.get("list_price", ""),
+                
+#                 # ฟิลด์รวมข้อมูลที่สำคัญ
+#                 "combine_fields": " | ".join([
+#                     result.get("Sales document", ""),
+#                     result.get("ชื่อผู้ซื้อ", ""),
+#                     result.get("ที่อยู่ผู้ซื้อ1", ""),
+#                     result.get("ที่อยู่ผู้ซื้อ2", ""),
+#                     result.get("ที่อยู่ผู้ซื้อ3", ""),
+#                     result.get("Sales Organization", ""),
+#                     result.get("brand", ""),
+#                     result.get("product_family", ""),
+#                     str(result.get("จำนวนที่ซื้อ", "")),
+#                     str(result.get("net price", ""))
+#                 ]).strip(" |")
+#             }
+            
+#             results.append(filtered_result)  
+
+#         return results if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
+    
+#     except Exception as e:
+#         print(f"❌ Error fetching sales data: {e}")
+#         return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
+
+
 
 def save_chatRedis(user_id, message):
     """บันทึกข้อความสนทนาลง Redis"""
@@ -271,6 +426,11 @@ def get_chat_history(user_id):
     if chat_history:
         return json.loads(chat_history)
     return []    
+
+from linebot.models import VideoSendMessage
+
+
+
 
 if __name__ == "__main__":
     import uvicorn
