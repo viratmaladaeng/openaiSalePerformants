@@ -1,4 +1,4 @@
-#main_BCK15
+#main_BCK11_redis_okok
 import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
@@ -68,9 +68,9 @@ sales_data_client = SearchClient(
 redis_client = redis.StrictRedis(
     host=REDIS_HOST,
     port=REDIS_PORT,
-    password=REDIS_PASSWORD
-)
-
+    password=REDIS_PASSWORD,
+    ssl=True  # ต้องเปิดใช้งาน SSL
+    )
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -146,7 +146,7 @@ def handle_message(event):
         search_query = " ".join(chat_history) if chat_history else user_message
 
         # 🔹 ค้นหาข้อมูลการขายจาก Azure Cognitive Search
-        sales_data = search_sales_data(search_query, top=10)
+        sales_data = search_sales_data(search_query, top=3)
 
         print(f"✅ ค้นหาข้อมูลการขายจาก: {search_query}")  # Debugging
         print(f"✅ ผลค้นหาข้อมูลการขายจาก RAG: {sales_data}")  # Debugging
@@ -156,11 +156,11 @@ def handle_message(event):
         chat_history.append({"role": "system", "content": system_message})
 
         # สร้าง prompt
-        prompt = f"\n\nsearch_sales_data:\n"
+        prompt = f"\n\nข้อมูลการขายที่เกี่ยวข้อง:\n"
         prompt += "\n".join([str(item) for item in sales_data])  # ต้องมีข้อมูลนี้
-        prompt += "\n\nchat_history:\n"
+        prompt += "\n\nนี่คือประวัติการสนทนาเดิมของคุณ:\n"
         prompt += "\n".join([json.dumps(item, ensure_ascii=False) for item in chat_history])  
-        prompt += f"\n\nUser: {user_message}\n AI:"
+        prompt += f"\n\nผู้ใช้: {user_message}\n AI:"
 
         # เพิ่ม system_message และ grounding_text เข้าไป
         #prompt += f"\n\n---\n🛠 **System Message**:\n{system_message}"
@@ -237,83 +237,14 @@ def handle_message(event):
     )
 
    
-def search_sales_data(query, top=10):  
+def search_sales_data(query, top=3):
     try:
-        search_results = sales_data_client.search(search_text=query, top=top)
-
-        results = []
-        for result in search_results:
-            filtered_result = {
-                # 🔹 Sales Information
-                "Sales_document_No": result.get("Sales_document", ""),
-                "Sales_document_item_No": result.get("Sales_document_item", ""),
-                "Billing_document_No": result.get("Billing_document", ""),
-                "Billing_item_No": result.get("Billing_item", ""),
-                "Sales_Order_Created_Date": result.get("Sales_Order_Created_Date", ""),
-                "Delivery_document_No": result.get("Delivery", ""),
-                "Billing_Date": result.get("Billing_Date", ""),
-                "CalMonth": result.get("CalMonth", ""),
-                "Sales_Organization": result.get("Sales_Organization", ""),
-                "Distribution_Channel_Key": result.get("Distribution_Channel_Key", ""),
-                "Distribution_Channel_Text": result.get("Distribution_Channel_Text", ""),
-                "Sales_Code": result.get("Sales_Code", ""),
-                "Selling_Unit": result.get("Selling_Unit", ""),
-                
-                # 🔹 Buyer Information
-                "Buyer_Name": result.get("Buyer_Name", ""),
-                "Buyer_Address": f"{result.get('Buyer_Address1', '')} {result.get('Buyer_Address2', '')} {result.get('Buyer_Address3', '')}".strip(),
-                "Buyer_Zip_Code": result.get("Buyer_Zip_Code", ""),
-                "Buyer_Phone": result.get("Buyer_Phone", ""),
-                "Buyer_Mobile": result.get("Buyer_Mobile", ""),
-                "Tax_No": result.get("Tax_No", ""),
-                "Tax_No2": result.get("Tax_No2", ""),
-
-                # 🔹 Recipient Information
-                "Recipient": result.get("Recipient", ""),
-                "Recipient_Address": f"{result.get('Recipient_Address1', '')} {result.get('Recipient_Address2', '')} {result.get('Recipient_Address3', '')}".strip(),
-                "Recipient_Zip_Code": result.get("Recipient_Zip_Code", ""),
-                "Recipient_Phone": result.get("Recipient_Phone", ""),
-                "Recipient_Mobile": result.get("Recipient_Mobile", ""),
-
-                # 🔹 Product Information
-                "Material_Key": result.get("Material_Key", ""),
-                "Sales_doc_type": result.get("Sales_doc_type", ""),
-                "Quotation_Number_Sales_Rep_OSR_Text": result.get("Quotation_Number_Sales_Rep_OSR_Text", ""),
-                "Project_Class": result.get("Project_Class", ""),
-                "Ship_To_Party_Key": result.get("Ship_To_Party_Key", ""),
-                "Sold_To_Sales_Sales_Office_ISR_1_Text": result.get("Sold_To_Sales_Sales_Office_ISR_1_Text", ""),
-                
-                "product_hierarchy_level_1": result.get("product_hierarchy_level_1", ""),
-                "product_hierarchy_level_2": result.get("product_hierarchy_level_2", ""),
-                "brand": result.get("brand", ""),
-                "product_family": result.get("product_family", ""),
-                "product_sub_family": result.get("product_sub_family", ""),
-
-                # 🔹 Quotation & Pricing
-                "Quotation_Number_Project_Owner_Key": result.get("Quotation_Number_Project_Owner_Key", ""),
-                "Quotation_Number_Project_Owner_Text": result.get("Quotation_Number_Project_Owner_Text", ""),
-                "Quantity_Purchased": result.get("Quantity_Purchased", ""),
-                "Purchase_Value": result.get("Purchase_Value", ""),
-                "Net_price": result.get("net_price", ""),
-                "Total_price": result.get("list_price", "")
-                
-                # # 🔹 Combine Fields (ใช้ชื่อใหม่)
-                # "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
-                #                 f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
-                #                 f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
-                #                 f"{result.get('brand', '')} | {result.get('product_family', '')} | "
-                #                 f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
-            }
-            
-            results.append(filtered_result)  
-
-        return results if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
-    
+        results = sales_data_client.search(search_text=query, top=top)
+        return [result["chunk"] for result in results] if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
     except Exception as e:
         print(f"❌ Error fetching sales data: {e}")
-        return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]        
+        return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
 
-    
 def save_chatRedis(user_id, message):
     """บันทึกข้อความสนทนาลง Redis"""
     chat_key = f"chat_history:{user_id}"
@@ -322,14 +253,13 @@ def save_chatRedis(user_id, message):
     chat_history = redis_client.get(chat_key)
     chat_history = json.loads(chat_history) if chat_history else []
 
-    # เพิ่มข้อความใหม่ โดยใช้ str() แทน JSON ถ้าจำเป็น
-    chat_history.append(str(message))
+    # เพิ่มข้อความใหม่
+    chat_history.append(message)
 
     # บันทึกกลับเข้า Redis พร้อมกำหนด TTL (เช่น 24 ชั่วโมง)
-    redis_client.setex(chat_key, timedelta(hours=24), json.dumps(chat_history, ensure_ascii=False))
+    redis_client.setex(chat_key, timedelta(hours=24), json.dumps(chat_history))
     
     print(f"✅ บันทึกข้อความสำเร็จ: {message}")
-
 
 def delete_chat_historyR(user_id):
     """ลบประวัติแชทของผู้ใช้"""
