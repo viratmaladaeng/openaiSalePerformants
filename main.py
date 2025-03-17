@@ -244,21 +244,29 @@ def search_sales_data(query, top=10):
         results = []
         for result in search_results:
             filtered_result = {
-                "Sales_document": result.get("Sales_document", ""),
-                "Sales_document_item": result.get("Sales_document_item", ""),
-                "Billing_document": result.get("Billing_document", ""),
-                "Billing_item": result.get("Billing_item", ""),
+                # 🔹 Combine Fields (ใช้ฟิลด์ใหม่)
+                "Index_Search_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
+                                    f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
+                                    f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
+                                    f"{result.get('brand', '')} | {result.get('product_family', '')} | "
+                                    f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip(),
+                
+                # 🔹 Sales Information
+                "Sales_document_No": result.get("Sales_document", ""),
+                "Sales_document_item_No": result.get("Sales_document_item", ""),
+                "Billing_document_No": result.get("Billing_document", ""),
+                "Billing_item_No": result.get("Billing_item", ""),
                 "Sales_Order_Created_Date": result.get("Sales_Order_Created_Date", ""),
-                "Delivery": result.get("Delivery", ""),
+                "Delivery_document_No": result.get("Delivery", ""),
                 "Billing_Date": result.get("Billing_Date", ""),
                 "CalMonth": result.get("CalMonth", ""),
                 "Sales_Organization": result.get("Sales_Organization", ""),
-                "Distribution_Channel_-_Key": result.get("Distribution_Channel_-_Key", ""),
-                "Distribution_Channel_-_Text": result.get("Distribution_Channel_-_Text", ""),
+                "Distribution_Channel_Key": result.get("Distribution_Channel_Key", ""),
+                "Distribution_Channel_Text": result.get("Distribution_Channel_Text", ""),
                 "Sales_Code": result.get("Sales_Code", ""),
                 "Selling_Unit": result.get("Selling_Unit", ""),
                 
-                # Buyer Information
+                # 🔹 Buyer Information
                 "Buyer_Name": result.get("Buyer_Name", ""),
                 "Buyer_Address": f"{result.get('Buyer_Address1', '')} {result.get('Buyer_Address2', '')} {result.get('Buyer_Address3', '')}".strip(),
                 "Buyer_Zip_Code": result.get("Buyer_Zip_Code", ""),
@@ -266,38 +274,42 @@ def search_sales_data(query, top=10):
                 "Buyer_Mobile": result.get("Buyer_Mobile", ""),
                 "Tax_No": result.get("Tax_No", ""),
                 "Tax_No2": result.get("Tax_No2", ""),
-                
-                # Recipient Information
+
+                # 🔹 Recipient Information
                 "Recipient": result.get("Recipient", ""),
                 "Recipient_Address": f"{result.get('Recipient_Address1', '')} {result.get('Recipient_Address2', '')} {result.get('Recipient_Address3', '')}".strip(),
                 "Recipient_Zip_Code": result.get("Recipient_Zip_Code", ""),
                 "Recipient_Phone": result.get("Recipient_Phone", ""),
                 "Recipient_Mobile": result.get("Recipient_Mobile", ""),
-                
-                # Product Information
-                "Material_-_Key": result.get("Material_-_Key", ""),
-                "Sales_doc._type": result.get("Sales_doc._type", ""),
-                "Quotation_Number_-_Sales_Rep./OSR_(Text)": result.get("Quotation_Number_-_Sales_Rep./OSR_(Text)", ""),
+
+                # 🔹 Product Information
+                "Material_Key": result.get("Material_Key", ""),
+                "Sales_doc_type": result.get("Sales_doc_type", ""),
+                "Quotation_Number_Sales_Rep_OSR_Text": result.get("Quotation_Number_Sales_Rep_OSR_Text", ""),
                 "Project_Class": result.get("Project_Class", ""),
-                "Ship-To_Party_-_Key": result.get("Ship-To_Party_-_Key", ""),
-                "Sold-To_(Sales)_-_Sales_Office_/_ISR_1_(Text)": result.get("Sold-To_(Sales)_-_Sales_Office_/_ISR_1_(Text)", ""),
+                "Ship_To_Party_Key": result.get("Ship_To_Party_Key", ""),
+                "Sold_To_Sales_Sales_Office_ISR_1_Text": result.get("Sold_To_Sales_Sales_Office_ISR_1_Text", ""),
                 
                 "product_hierarchy_level_1": result.get("product_hierarchy_level_1", ""),
                 "product_hierarchy_level_2": result.get("product_hierarchy_level_2", ""),
                 "brand": result.get("brand", ""),
                 "product_family": result.get("product_family", ""),
                 "product_sub_family": result.get("product_sub_family", ""),
-                
-                # Quotation & Pricing
-                "Quotation_Number_-_Project_Owner_(Key)": result.get("Quotation_Number_-_Project_Owner_(Key)", ""),
-                "Quotation_Number_-_Project_Owner_(Text)": result.get("Quotation_Number_-_Project_Owner_(Text)", ""),
+
+                # 🔹 Quotation & Pricing
+                "Quotation_Number_Project_Owner_Key": result.get("Quotation_Number_Project_Owner_Key", ""),
+                "Quotation_Number_Project_Owner_Text": result.get("Quotation_Number_Project_Owner_Text", ""),
                 "Quantity_Purchased": result.get("Quantity_Purchased", ""),
                 "Purchase_Value": result.get("Purchase_Value", ""),
-                "net_price": result.get("net_price", ""),
-                "list_price": result.get("list_price", ""),
+                "Net_price": result.get("net_price", ""),
+                "Total_price": result.get("list_price", ""),
                 
-                # Combine Fields
-               # "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | {result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | {result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | {result.get('brand', '')} | {result.get('product_family', '')} | {result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
+                # 🔹 Combine Fields (ใช้ชื่อใหม่)
+                "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
+                                f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
+                                f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
+                                f"{result.get('brand', '')} | {result.get('product_family', '')} | "
+                                f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
             }
             
             results.append(filtered_result)  
@@ -306,95 +318,9 @@ def search_sales_data(query, top=10):
     
     except Exception as e:
         print(f"❌ Error fetching sales data: {e}")
-        return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
+        return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]        
 
-# def search_sales_data(query, top=10):
-#     try:
-#         search_results = sales_data_client.search(search_text=query, top=top)
-
-#         results = []
-#         for result in search_results:
-#             filtered_result = {
-#                 # ข้อมูลเอกสาร
-#                 "Sales_document": result.get("Sales document", ""),
-#                 "Sales_document_item": result.get("Sales document item", ""),
-#                 "Billing_document": result.get("Billing document", ""),
-#                 "Billing_item": result.get("Billing item", ""),
-#                 "Sales_Order_Created_Date": result.get("Sales Order Created Date", ""),
-#                 "Delivery": result.get("Delivery", ""),
-#                 "Billing_Date": result.get("Billing Date", ""),
-#                 "CalMonth": result.get("CalMonth", ""),
-                
-#                 # ข้อมูลการขาย
-#                 "Sales_Organization": result.get("Sales Organization", ""),
-#                 "Distribution_Channel_Key": result.get("Distribution Channel - Key", ""),
-#                 "Distribution_Channel_Text": result.get("Distribution Channel - Text", ""),
-#                 "Sales_Code": result.get("รหัสขาย", ""),
-#                 "Selling_Unit": result.get("หน่วยงานที่ขาย", ""),
-                
-#                 # ข้อมูลผู้ซื้อ
-#                 "Buyer_Name": result.get("ชื่อผู้ซื้อ", ""),
-#                 "Buyer_Address": f"{result.get('ที่อยู่ผู้ซื้อ1', '')} {result.get('ที่อยู่ผู้ซื้อ2', '')} {result.get('ที่อยู่ผู้ซื้อ3', '')}".strip(),
-#                 "Buyer_Zip_Code": result.get("รหัสไปรษณีย์ผู้ซื้อ", ""),
-#                 "Buyer_Phone": result.get("เบอร์โทรผู้ซื้อ", ""),
-#                 "Buyer_Mobile": result.get("Mobile ผู้ซื้อ", ""),
-#                 "Tax_No": result.get("Tax No", ""),
-#                 "Tax_No2": result.get("Tax No2", ""),
-                
-#                 # ข้อมูลผู้รับสินค้า
-#                 "Recipient": result.get("ผู้รับสินค้า", ""),
-#                 "Recipient_Address": f"{result.get('ที่อยู่ผู้รับ1', '')} {result.get('ที่อยู่ผู้รับ2', '')} {result.get('ที่อยู่ผู้รับ3', '')}".strip(),
-#                 "Recipient_Zip_Code": result.get("รหัสไปรษณีย์ผู้รับ", ""),
-#                 "Recipient_Phone": result.get("เบอร์โทรผู้รับ", ""),
-#                 "Recipient_Mobile": result.get("Mobile ผู้รับ", ""),
-                
-#                 # ข้อมูลสินค้า
-#                 "Material_Key": result.get("Material - Key", ""),
-#                 "Sales_doc_type": result.get("Sales doc. type", ""),
-#                 "Quotation_Number_Sales_Rep_OSR_Text": result.get("Quotation Number - Sales Rep./OSR (Text)", ""),
-#                 "Project_Class": result.get("Project_Class", ""),
-#                 "Ship_To_Party_Key": result.get("Ship-To Party - Key", ""),
-#                 "Sold_To_Sales_Sales_Office_ISR_1_Text": result.get("Sold-To (Sales) - Sales Office / ISR 1 (Text)", ""),
-                
-#                 "product_hierarchy_level_1": result.get("product_hierarchy_level_1", ""),
-#                 "product_hierarchy_level_2": result.get("product_hierarchy_level_2", ""),
-#                 "brand": result.get("brand", ""),
-#                 "product_family": result.get("product_family", ""),
-#                 "product_sub_family": result.get("product_sub_family", ""),
-                
-#                 # ข้อมูลใบเสนอราคาและราคา
-#                 "Quotation_Number_Project_Owner_Key": result.get("Quotation Number - Project Owner (Key)", ""),
-#                 "Quotation_Number_Project_Owner_Text": result.get("Quotation Number - Project Owner (Text)", ""),
-#                 "Quantity_Purchased": result.get("จำนวนที่ซื้อ", ""),
-#                 "Purchase_Value": result.get("มูลค่าที่ซื้อ", ""),
-#                 "net_price": result.get("net price", ""),
-#                 "list_price": result.get("list_price", ""),
-                
-#                 # ฟิลด์รวมข้อมูลที่สำคัญ
-#                 "combine_fields": " | ".join([
-#                     result.get("Sales document", ""),
-#                     result.get("ชื่อผู้ซื้อ", ""),
-#                     result.get("ที่อยู่ผู้ซื้อ1", ""),
-#                     result.get("ที่อยู่ผู้ซื้อ2", ""),
-#                     result.get("ที่อยู่ผู้ซื้อ3", ""),
-#                     result.get("Sales Organization", ""),
-#                     result.get("brand", ""),
-#                     result.get("product_family", ""),
-#                     str(result.get("จำนวนที่ซื้อ", "")),
-#                     str(result.get("net price", ""))
-#                 ]).strip(" |")
-#             }
-            
-#             results.append(filtered_result)  
-
-#         return results if results else ["ไม่พบข้อมูลการขายที่เกี่ยวข้อง"]
     
-#     except Exception as e:
-#         print(f"❌ Error fetching sales data: {e}")
-#         return ["เกิดข้อผิดพลาดในการค้นหาข้อมูล"]
-
-
-
 def save_chatRedis(user_id, message):
     """บันทึกข้อความสนทนาลง Redis"""
     chat_key = f"chat_history:{user_id}"
@@ -403,13 +329,14 @@ def save_chatRedis(user_id, message):
     chat_history = redis_client.get(chat_key)
     chat_history = json.loads(chat_history) if chat_history else []
 
-    # เพิ่มข้อความใหม่
-    chat_history.append(message)
+    # เพิ่มข้อความใหม่ โดยใช้ str() แทน JSON ถ้าจำเป็น
+    chat_history.append(str(message))
 
     # บันทึกกลับเข้า Redis พร้อมกำหนด TTL (เช่น 24 ชั่วโมง)
-    redis_client.setex(chat_key, timedelta(hours=24), json.dumps(chat_history))
+    redis_client.setex(chat_key, timedelta(hours=24), json.dumps(chat_history, ensure_ascii=False))
     
     print(f"✅ บันทึกข้อความสำเร็จ: {message}")
+
 
 def delete_chat_historyR(user_id):
     """ลบประวัติแชทของผู้ใช้"""
