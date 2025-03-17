@@ -1,4 +1,4 @@
-#main_BCK11_redis_okok
+#main_BCK15
 import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
@@ -68,9 +68,9 @@ sales_data_client = SearchClient(
 redis_client = redis.StrictRedis(
     host=REDIS_HOST,
     port=REDIS_PORT,
-    password=REDIS_PASSWORD,
-    ssl=True  # ต้องเปิดใช้งาน SSL
-    )
+    password=REDIS_PASSWORD
+)
+
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -244,13 +244,6 @@ def search_sales_data(query, top=10):
         results = []
         for result in search_results:
             filtered_result = {
-                # 🔹 Combine Fields (ใช้ฟิลด์ใหม่)
-                "Index_Search_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
-                                    f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
-                                    f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
-                                    f"{result.get('brand', '')} | {result.get('product_family', '')} | "
-                                    f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip(),
-                
                 # 🔹 Sales Information
                 "Sales_document_No": result.get("Sales_document", ""),
                 "Sales_document_item_No": result.get("Sales_document_item", ""),
@@ -302,14 +295,14 @@ def search_sales_data(query, top=10):
                 "Quantity_Purchased": result.get("Quantity_Purchased", ""),
                 "Purchase_Value": result.get("Purchase_Value", ""),
                 "Net_price": result.get("net_price", ""),
-                "Total_price": result.get("list_price", ""),
+                "Total_price": result.get("list_price", "")
                 
-                # 🔹 Combine Fields (ใช้ชื่อใหม่)
-                "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
-                                f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
-                                f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
-                                f"{result.get('brand', '')} | {result.get('product_family', '')} | "
-                                f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
+                # # 🔹 Combine Fields (ใช้ชื่อใหม่)
+                # "combine_fields": f"{result.get('Sales_document', '')} | {result.get('Buyer_Name', '')} | "
+                #                 f"{result.get('Buyer_Address1', '')} | {result.get('Buyer_Address2', '')} | "
+                #                 f"{result.get('Buyer_Address3', '')} | {result.get('Sales_Organization', '')} | "
+                #                 f"{result.get('brand', '')} | {result.get('product_family', '')} | "
+                #                 f"{result.get('Quantity_Purchased', '')} | {result.get('net_price', '')}".strip()
             }
             
             results.append(filtered_result)  
