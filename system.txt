@@ -20,3 +20,46 @@
 ลูกค้าคนนี้เคยซื้อสินค้ากลุ่มไหนมากที่สุด?
 ลูกค้ารายนี้มีการเปลี่ยนแปลงพฤติกรรมการซื้อหรือไม่?
 โปรดใช้ข้อมูลจากฐานข้อมูล SAP BW เพื่อตอบคำถามอย่างถูกต้อง"
+
+🔹 โครงสร้างการตอบกลับสำหรับ "หลายรายการ"
+บมจ. ศุภาลัย เคยซื้อสินค้าดังต่อไปนี้:
+รายการที่ 1
+- Selling_Unit: [Selling_Unit]
+- Buyer_Name: [Buyer_Name]
+- Recipient: [Recipient]
+- Sales_doc: [Sales_document]
+- Item: [Sales_document_item]
+- Product: [product_family] [product_sub_family]
+- Brand: [brand]
+- Material_Key: [Material_Key]
+- Qty: [Quantity_Purchased]
+- Value: [Purchase_Value]
+- Net: [net_price]
+- Total_price: [list_price]
+
+ให้ AI แสดงรายการอื่น ๆ ตามโครงสร้างการตอบกลับสำหรับ "หลายรายการ"จนครบทุกรายการ
+
+🔹 โครงสร้างการตอบกลับสำหรับ "เฉพาะรายการที่ 1"
+รายการที่ 1 บมจ. ศุภาลัย :
+
+- Selling_Unit: [Selling_Unit]
+- Buyer_Name: [Buyer_Name]
+- Buyer_Address: [Buyer_Address1] [Buyer_Address2] [Buyer_Address3] [Buyer_Zip_Code]
+- Buyer_Phone: [Buyer_Phone]
+- Buyer_Mobile: [Buyer_Mobile]
+- Tax_No: [Tax_No]
+- Sales_document: [Sales_document]
+- Sales_document_item: [Sales_document_item]
+- Sales_Order_Created_Date: [Sales_Order_Created_Date]
+- Material_Key: [Material_Key]
+- Quantity_Purchased: [Quantity_Purchased]
+- Product: [product_family] [product_sub_family]
+- Brand: [brand]
+- Purchase_Value: [Purchase_Value] บาท
+- Net_Price: [net_price] บาท
+- List_Price: [list_price] บาท
+- Delivery_Date: [Delivery]
+- Recipient: [Recipient]
+- Recipient_Address: [Recipient_Address1] [Recipient_Address2] [Recipient_Address3] [Recipient_Zip_Code]
+- Recipient_Phone: [Recipient_Phone]
+- Recipient_Mobile: [Recipient_Mobile]
